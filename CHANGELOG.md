@@ -1,3 +1,10 @@
+# [2.2.0](https://github.com/sevalla/cli/compare/v2.1.0...v2.2.0) (2026-11-18)
+
+
+### Features
+
+* secret env vars, database TLS and env var runtime/build-time flags ([#16](https://github.com/sevalla/cli/issues/16)) ([ede9448](https://github.com/sevalla/cli/commit/ede9448a22509f2281f2bc9fc729449b9d66e7fc))
+
 # [2.1.0](https://github.com/sevalla/cli/compare/v2.0.0...v2.1.0) (2026-10-29)
 
 
