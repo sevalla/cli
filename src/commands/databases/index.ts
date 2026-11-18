@@ -8,6 +8,7 @@ import { databasesActivateCommand } from './activate.ts';
 import { databasesSuspendCommand } from './suspend.ts';
 import { databasesRestartCommand } from './restart.ts';
 import { databasesResetPasswordCommand } from './reset-password.ts';
+import { databasesEnableTlsCommand } from './enable-tls.ts';
 import { makeDatabaseMetricsCommands } from './metrics/index.ts';
 import { makeBackupsCommands } from './backups/index.ts';
 import { makeBackupTargetsCommands } from './backup-targets/index.ts';
@@ -26,6 +27,7 @@ export function makeDatabasesCommand(): Command {
   cmd.addCommand(databasesSuspendCommand);
   cmd.addCommand(databasesRestartCommand);
   cmd.addCommand(databasesResetPasswordCommand);
+  cmd.addCommand(databasesEnableTlsCommand);
   cmd.addCommand(makeDatabaseMetricsCommands());
   cmd.addCommand(makeBackupsCommands());
   cmd.addCommand(makeBackupTargetsCommands());

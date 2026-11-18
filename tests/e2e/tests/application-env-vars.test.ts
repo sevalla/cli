@@ -189,6 +189,74 @@ describe('application environment variables', () => {
     assert.ok(!res.stdout.includes('updated-value-456'), 'update should not echo the value')
   })
 
+  it('should create a secret variable whose value is never returned', async () => {
+    assert.ok(createdAppId, 'createdAppId must be set from before hook')
+
+    const res = await sevalla([
+      'apps', 'env-vars', 'create', createdAppId, '--key', 'E2E_SECRET_VAR', '--value', 'secret-value-789',
+      '--secret', '--runtime', 'true', '--buildtime', 'false',
+    ])
+    assert.equal(res.exitCode, 0, `env-vars create --secret failed: ${res.stderr}`)
+    const created = res.json<EnvVar>()
+    assert.equal(created.is_secret, true)
+    assert.equal(created.is_runtime, true)
+    assert.equal(created.is_buildtime, false)
+
+    const list = await sevalla(['apps', 'env-vars', 'list', '--app-id', createdAppId, '--show-values'])
+    assert.equal(list.exitCode, 0, `env-vars list failed: ${list.stderr}`)
+    const found = list.json<EnvVar[]>().find((v) => v.id === created.id)
+    assert.equal(found?.is_secret, true)
+    assert.equal(found?.value, null)
+    assert.ok(!list.stdout.includes('secret-value-789'))
+  })
+
+  it('should reject a non-boolean --runtime', async () => {
+    assert.ok(createdAppId, 'createdAppId must be set from before hook')
+    const res = await sevalla([
+      'apps', 'env-vars', 'create', createdAppId, '--key', 'E2E_BAD', '--value', 'x', '--runtime', 'yes',
+    ])
+    assert.equal(res.exitCode, 1)
+    assert.match(res.stderr, /--runtime must be true or false/)
+  })
+
+  it('should make a regular variable secret and turn off its build-time use', async () => {
+    assert.ok(createdAppId, 'createdAppId must be set from before hook')
+    assert.ok(createdEnvVarId, 'createdEnvVarId must be set from create test')
+
+    const res = await sevalla([
+      'apps', 'env-vars', 'update', createdEnvVarId, '--app-id', createdAppId, '--secret', '--buildtime', 'false',
+    ])
+    assert.equal(res.exitCode, 0, `env-vars update --secret failed: ${res.stderr}`)
+    const updated = res.json<EnvVar>()
+    assert.equal(updated.is_secret, true)
+    assert.equal(updated.is_buildtime, false)
+  })
+
+  it('should create, list and delete a secret global variable', async () => {
+    const res = await sevalla([
+      'global-env-vars', 'create', '--key', `E2E_GLOBAL_SECRET_${ts}`, '--value', 'global-secret-321', '--secret',
+      '--buildtime', 'false',
+    ])
+    assert.equal(res.exitCode, 0, `global-env-vars create --secret failed: ${res.stderr}`)
+    const created = res.json<EnvVar>()
+    try {
+      assert.equal(created.is_secret, true)
+      assert.equal(created.is_buildtime, false)
+      const list = await sevalla(['global-env-vars', 'list', '--show-values', '--per-page', '100'])
+      assert.equal(list.exitCode, 0, `global-env-vars list failed: ${list.stderr}`)
+      // The list is oldest first, so --per-page 100 may not reach a new variable on a busy company
+      const found = list.json<EnvVar[]>().find((v) => v.id === created.id)
+      if (found) assert.equal(found.value, null)
+      assert.ok(!list.stdout.includes('global-secret-321'))
+
+      const update = await sevalla(['global-env-vars', 'update', created.id, '--value', 'replaced', '--secret'])
+      assert.equal(update.exitCode, 0, `global-env-vars update --secret failed: ${update.stderr}`)
+      assert.equal(update.json<EnvVar>().is_secret, true)
+    } finally {
+      await safeDelete(['global-env-vars'], created.id)
+    }
+  })
+
   it('should delete an environment variable', async () => {
     assert.ok(createdAppId, 'createdAppId must be set from before hook')
     assert.ok(createdEnvVarId, 'createdEnvVarId must be set from create test')

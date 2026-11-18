@@ -120,7 +120,10 @@ describe(RESOURCE, () => {
     assert.ok(createdId, 'No database was created')
     const res = await sevalla([RESOURCE, 'get', createdId])
     assert.equal(res.exitCode, 0, `get failed: ${res.stderr}`)
-    assert.equal(res.json<{ id: string }>().id, createdId)
+    const db = res.json<{ id: string; tls_enabled: boolean; tls_ca_certificate: string | null }>()
+    assert.equal(db.id, createdId)
+    assert.equal(typeof db.tls_enabled, 'boolean')
+    assert.ok('tls_ca_certificate' in db, 'get should return tls_ca_certificate')
   })
 
   it('should return exit code 1 for non-existent database', async () => {
@@ -258,6 +261,32 @@ describe(RESOURCE, () => {
   })
 
   // ---------------------------------------------------------------------------
+  // TLS
+  // ---------------------------------------------------------------------------
+  it('should refuse enable-tls without --confirm', async () => {
+    assert.ok(createdId, 'No database was created')
+    const res = await sevalla([RESOURCE, 'enable-tls', createdId])
+    assert.equal(res.exitCode, 1)
+    assert.match(res.stderr, /Use --confirm to proceed/)
+  })
+
+  it('should enable TLS on the database', async () => {
+    assert.ok(createdId, 'No database was created')
+    await waitForDbReady(createdId)
+    // Non-OCI clusters refuse with a 400; on OCI it starts, or reports TLS is already on
+    const res = await sevalla([RESOURCE, 'enable-tls', createdId, '--confirm'])
+    if (res.exitCode !== 0) {
+      assert.equal(JSON.parse(res.stderr).error.status, 400, `enable-tls failed: ${res.stderr}`)
+      return
+    }
+    assert.match(res.json<{ message: string }>().message, /TLS/)
+    await waitForDbReady(createdId)
+    const db = (await sevalla([RESOURCE, 'get', createdId])).json<{ tls_enabled: boolean; tls_ca_certificate: string | null }>()
+    assert.equal(db.tls_enabled, true)
+    assert.match(db.tls_ca_certificate ?? '', /BEGIN CERTIFICATE/)
+  })
+
+  // ---------------------------------------------------------------------------
   // Reset password
   // ---------------------------------------------------------------------------
   it('should reset the database password', async () => {
@@ -291,19 +320,6 @@ describe(RESOURCE, () => {
     const res = await sevalla([RESOURCE, 'activate', createdId])
     assert.equal(res.exitCode, 0, `activate failed: ${res.stderr}`)
     await waitForDbReady(createdId)
-  })
-
-  // ---------------------------------------------------------------------------
-  // Delete
-  // ---------------------------------------------------------------------------
-  it('should delete a database with --confirm', async () => {
-    assert.ok(createdId, 'No database was created')
-    const res = await sevalla([RESOURCE, 'delete', createdId, '--confirm'], { timeout: 60_000 })
-    assert.equal(res.exitCode, 0, `delete failed: ${res.stderr}`)
-    const data = res.json<{ deleted: boolean; id: string }>()
-    assert.equal(data.deleted, true)
-    assert.equal(data.id, createdId)
-    createdId = undefined
   })
 
   // ---------------------------------------------------------------------------
@@ -413,5 +429,18 @@ describe(RESOURCE, () => {
     } finally {
       await safeDelete(['object-storage'], bucketId)
     }
+  })
+
+  // ---------------------------------------------------------------------------
+  // Delete
+  // ---------------------------------------------------------------------------
+  it('should delete a database with --confirm', async () => {
+    assert.ok(createdId, 'No database was created')
+    const res = await sevalla([RESOURCE, 'delete', createdId, '--confirm'], { timeout: 60_000 })
+    assert.equal(res.exitCode, 0, `delete failed: ${res.stderr}`)
+    const data = res.json<{ deleted: boolean; id: string }>()
+    assert.equal(data.deleted, true)
+    assert.equal(data.id, createdId)
+    createdId = undefined
   })
 })

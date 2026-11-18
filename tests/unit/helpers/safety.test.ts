@@ -133,6 +133,10 @@ describe('Safety and agent-facing behaviour', () => {
       name: 'n',
     });
     assert.deepEqual(maskSecrets([1]), [1]);
+    assert.deepEqual(maskSecrets({ value: 'v', is_secret: true }), {
+      value: '********',
+      is_secret: true,
+    });
   });
 
   describe('list pagination hint', () => {
@@ -173,6 +177,11 @@ describe('Safety and agent-facing behaviour', () => {
       assert.equal(envVarColumns[2]?.get?.(hidden.data[0] ?? {}), '(hidden)');
       const shown = await listEnvVars(client, '/env', { showValues: true });
       assert.equal(shown.data[0]?.['value'], 'secret');
+    });
+
+    it('show (secret) for write-only variables, whose value the API returns as null', () => {
+      const item = { id: '1', key: 'K', value: null, is_secret: true };
+      assert.equal(envVarColumns[2]?.get?.(item), '(secret)');
     });
   });
 

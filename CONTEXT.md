@@ -62,7 +62,7 @@ sevalla apps create --data '{"display_name":"test"}' --dry-run
 
 ## Destructive Operations
 
-The CLI never prompts. Commands that delete data or can't be undone fail unless `--confirm` is passed: every `delete`/`remove`, and `apps suspend`, `databases suspend`, `databases reset-password`, `databases backups restore`, `databases external-backups restore`, `api-keys rotate`, `object-storage rotate-credentials`, `webhooks roll-secret`, `apps deployment-hook regenerate`, `apps deployment-hook disable`.
+The CLI never prompts. Commands that delete data or can't be undone fail unless `--confirm` is passed: every `delete`/`remove`, and `apps suspend`, `databases suspend`, `databases reset-password`, `databases enable-tls`, `databases backups restore`, `databases external-backups restore`, `api-keys rotate`, `object-storage rotate-credentials`, `webhooks roll-secret`, `apps deployment-hook regenerate`, `apps deployment-hook disable`.
 
 ```bash
 sevalla apps delete <id> --confirm
@@ -76,7 +76,7 @@ sevalla apps delete <id> --confirm
 
 ## Secrets
 
-Environment variable values are hidden by default (`env-vars list` shows keys only; pass `--show-values` to include them), and `env-vars create`/`update` don't echo the value back.
+Environment variable values are hidden by default (`env-vars list` shows keys only; pass `--show-values` to include them), and `env-vars create`/`update` don't echo the value back. Variables created or updated with `--secret` are write-only: the API returns `is_secret: true` and `value: null` for them, even with `--show-values`, and they can't be made regular again.
 
 ## Error Format
 

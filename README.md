@@ -161,6 +161,8 @@ sevalla apps domains refresh-status <app-id> <domain-id>
 # Values are hidden; add --show-values to see them
 sevalla apps env-vars list --app-id <id>
 sevalla apps env-vars create <app-id> --key MY_VAR --value "my value"
+# A secret value is write-only: it can be replaced but never read back, and can't be made regular again
+sevalla apps env-vars create <app-id> --key API_TOKEN --value "$API_TOKEN" --secret --buildtime false
 sevalla apps env-vars update <env-var-id> --app-id <id> --value "new value"
 sevalla apps env-vars delete <app-id> <env-var-id>
 ```
@@ -231,6 +233,8 @@ sevalla databases delete <id>
 sevalla databases activate <id>
 sevalla databases suspend <id> --confirm
 sevalla databases reset-password <id> --new-password "$DB_PASSWORD" --confirm
+# OCI databases created without TLS; it can't be turned off again and restarts the database once
+sevalla databases enable-tls <id> --confirm
 ```
 
 ### Database backups
@@ -521,6 +525,7 @@ sevalla api-keys current
 ```sh
 sevalla global-env-vars list
 sevalla global-env-vars create --key MY_VAR --value "my value"
+sevalla global-env-vars create --key API_TOKEN --value "$API_TOKEN" --secret --buildtime false
 sevalla global-env-vars update <id>
 sevalla global-env-vars delete <id>
 ```
