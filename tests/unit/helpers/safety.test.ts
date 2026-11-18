@@ -174,6 +174,11 @@ describe('Safety and agent-facing behaviour', () => {
       const shown = await listEnvVars(client, '/env', { showValues: true });
       assert.equal(shown.data[0]?.['value'], 'secret');
     });
+
+    it('show (secret) for write-only variables, whose value the API returns as null', () => {
+      const item = { id: '1', key: 'K', value: null, is_secret: true };
+      assert.equal(envVarColumns[2]?.get?.(item), '(secret)');
+    });
   });
 
   describe('auth status', () => {

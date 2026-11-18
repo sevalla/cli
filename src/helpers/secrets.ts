@@ -30,7 +30,12 @@ export function showValuesOption(): Option {
 export const envVarColumns: ColumnDef<Item>[] = [
   { header: 'ID', key: 'id' },
   { header: 'Key', key: 'key' },
-  { header: 'Value', get: (item) => ('value' in item ? String(item['value']) : '(hidden)') },
+  {
+    header: 'Value',
+    // Secret values come back as null: the API never returns them
+    get: (item) =>
+      item['is_secret'] ? '(secret)' : 'value' in item ? String(item['value']) : '(hidden)',
+  },
 ];
 
 export async function listEnvVars(

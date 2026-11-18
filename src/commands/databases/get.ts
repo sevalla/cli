@@ -9,6 +9,7 @@ export const databasesGetCommand = makeGetCommand({
     Type: item['type'],
     Status: item['status'],
     Region: item['region'],
+    TLS: item['tls_enabled'],
     'Created At': item['created_at'],
   }),
   apiCall: (client, id) => client.get(`/databases/${id}`),

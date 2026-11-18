@@ -7,6 +7,10 @@ export const globalEnvVarsUpdateCommand = makeUpdateCommand({
   options: [
     { flags: '--key <key>', description: 'Variable key' },
     { flags: '--value <value>', description: 'Variable value' },
+    {
+      flags: '--secret',
+      description: 'Make the value write-only: it can be replaced but never read back. Permanent',
+    },
   ],
   displayFields: (item: Record<string, unknown>) => ({
     ID: item['id'],
@@ -16,6 +20,7 @@ export const globalEnvVarsUpdateCommand = makeUpdateCommand({
     const body: Record<string, unknown> = {};
     if (opts['key']) body['key'] = opts['key'];
     if (opts['value']) body['value'] = opts['value'];
+    if (opts['secret']) body['is_secret'] = true;
     return client
       .put<Record<string, unknown>>(`/applications/global-env-vars/${id}`, body)
       .then(omitValue);
