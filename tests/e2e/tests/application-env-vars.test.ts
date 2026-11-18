@@ -235,15 +235,18 @@ describe('application environment variables', () => {
   it('should create, list and delete a secret global variable', async () => {
     const res = await sevalla([
       'global-env-vars', 'create', '--key', `E2E_GLOBAL_SECRET_${ts}`, '--value', 'global-secret-321', '--secret',
+      '--buildtime', 'false',
     ])
     assert.equal(res.exitCode, 0, `global-env-vars create --secret failed: ${res.stderr}`)
     const created = res.json<EnvVar>()
     try {
       assert.equal(created.is_secret, true)
+      assert.equal(created.is_buildtime, false)
       const list = await sevalla(['global-env-vars', 'list', '--show-values', '--per-page', '100'])
       assert.equal(list.exitCode, 0, `global-env-vars list failed: ${list.stderr}`)
+      // The list is oldest first, so --per-page 100 may not reach a new variable on a busy company
       const found = list.json<EnvVar[]>().find((v) => v.id === created.id)
-      assert.equal(found?.value, null)
+      if (found) assert.equal(found.value, null)
       assert.ok(!list.stdout.includes('global-secret-321'))
 
       const update = await sevalla(['global-env-vars', 'update', created.id, '--value', 'replaced', '--secret'])

@@ -5,7 +5,8 @@ import type { ColumnDef } from '../output/table.ts';
 
 type Item = Record<string, unknown>;
 
-// Keys whose values dry-run output must not echo back (`value` is an env var value)
+// Keys whose values dry-run output must not echo back (`value` is an env var value);
+// only strings are masked, so flags such as is_secret: true stay visible
 const SECRET_KEY = /password|secret|^value$/i;
 
 export function maskSecrets(body: unknown): unknown {
@@ -13,7 +14,7 @@ export function maskSecrets(body: unknown): unknown {
   return Object.fromEntries(
     Object.entries(body).map(([k, v]) => [
       k,
-      SECRET_KEY.test(k) && v !== undefined ? '********' : v,
+      SECRET_KEY.test(k) && typeof v === 'string' ? '********' : v,
     ]),
   );
 }

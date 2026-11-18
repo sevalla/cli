@@ -133,6 +133,10 @@ describe('Safety and agent-facing behaviour', () => {
       name: 'n',
     });
     assert.deepEqual(maskSecrets([1]), [1]);
+    assert.deepEqual(maskSecrets({ value: 'v', is_secret: true }), {
+      value: '********',
+      is_secret: true,
+    });
   });
 
   describe('list pagination hint', () => {

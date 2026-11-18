@@ -525,7 +525,7 @@ sevalla api-keys current
 ```sh
 sevalla global-env-vars list
 sevalla global-env-vars create --key MY_VAR --value "my value"
-sevalla global-env-vars create --key API_TOKEN --value "$API_TOKEN" --secret
+sevalla global-env-vars create --key API_TOKEN --value "$API_TOKEN" --secret --buildtime false
 sevalla global-env-vars update <id>
 sevalla global-env-vars delete <id>
 ```
