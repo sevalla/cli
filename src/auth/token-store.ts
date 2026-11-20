@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync, mkdirSync, existsSync, unlinkSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, existsSync, unlinkSync, chmodSync } from 'node:fs';
 import { CONFIG_DIR, CREDENTIALS_FILE } from '../helpers/config.ts';
 
 interface Credentials {
@@ -39,6 +39,8 @@ export function saveToken(token: string): void {
   writeFileSync(CREDENTIALS_FILE, JSON.stringify(data, null, 2) + '\n', {
     mode: 0o600,
   });
+  // writeFileSync's mode only applies to new files, so tighten older ones too.
+  chmodSync(CREDENTIALS_FILE, 0o600);
 }
 
 export function clearToken(): void {

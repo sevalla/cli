@@ -2,7 +2,7 @@ import chalk from 'chalk';
 import open from 'open';
 import { ApiClient } from '../client/api-client.ts';
 import { saveToken } from './token-store.ts';
-import { AUTHORIZE_URL, getBaseUrl } from '../helpers/config.ts';
+import { AUTHORIZE_URL, getBaseUrl, getVersion } from '../helpers/config.ts';
 import { SevallaApiError } from '../errors/api-error.ts';
 import { SevallaCliError } from '../errors/cli-error.ts';
 import { startSpinner, succeedSpinner, failSpinner } from '../output/spinner.ts';
@@ -23,14 +23,27 @@ interface DeviceCodeStatus {
 const POLL_INTERVAL_MS = 5_000;
 const SLOW_DOWN_MS = 5_000;
 const MAX_POLL_INTERVAL_MS = 60_000;
+const EXPIRED_MESSAGE =
+  'Device code expired. Run "sevalla login" again. If you already approved this sign-in, check API keys in the Sevalla dashboard and delete any key you do not use.';
 
-export async function performDeviceFlow(apiUrl?: string): Promise<void> {
+export async function performDeviceFlow(
+  apiUrl?: string,
+  openBrowser: (url: string) => Promise<unknown> = open,
+): Promise<void> {
   const baseUrl = apiUrl ? apiUrl : getBaseUrl();
   const client = new ApiClient({ baseUrl });
 
   // Step 1: Create device code
-  const { user_code, device_code, expires_at, interval } =
-    await client.post<DeviceCode>('/auth/device-codes');
+  const { user_code, device_code, expires_at, interval } = await client.request<DeviceCode>({
+    method: 'POST',
+    path: '/auth/device-codes',
+    headers: { 'x-sevalla-client': `sevalla-cli/${getVersion()}` },
+  });
+  if (!user_code || !device_code) {
+    throw new SevallaCliError(
+      `The API at ${new URL(baseUrl).host} does not support this sign-in flow. Check --api-url or SEVALLA_API_URL, or update the CLI.`,
+    );
+  }
 
   // Step 2: Show the code to type and open the authorize page without it
   console.log();
@@ -48,7 +61,7 @@ export async function performDeviceFlow(apiUrl?: string): Promise<void> {
   console.log();
 
   try {
-    await open(AUTHORIZE_URL);
+    await openBrowser(AUTHORIZE_URL);
   } catch {
     // Browser open failed, user can do it manually
   }
@@ -59,7 +72,7 @@ export async function performDeviceFlow(apiUrl?: string): Promise<void> {
     client,
     device_code,
     new Date(expires_at).getTime(),
-    interval ? interval * 1000 : POLL_INTERVAL_MS,
+    interval,
   );
   saveToken(token);
   succeedSpinner('Successfully logged in!');
@@ -69,9 +82,11 @@ export async function pollDeviceToken(
   client: ApiClient,
   deviceCode: string,
   expiresAt: number,
-  intervalMs = POLL_INTERVAL_MS,
+  intervalSeconds?: unknown,
   wait = sleep,
 ): Promise<string> {
+  let intervalMs = Math.max(POLL_INTERVAL_MS, Number(intervalSeconds) * 1000 || POLL_INTERVAL_MS);
+
   while (Date.now() < expiresAt) {
     await wait(intervalMs);
 
@@ -83,8 +98,13 @@ export async function pollDeviceToken(
     } catch (error) {
       if (error instanceof SevallaApiError && error.status === 429) {
         intervalMs = Math.min(intervalMs + SLOW_DOWN_MS, MAX_POLL_INTERVAL_MS);
+      } else if (error instanceof SevallaApiError && error.status < 500) {
+        failSpinner('Authorization failed');
+        throw new SevallaCliError(
+          `Sign-in failed: the API rejected the request (HTTP ${error.status}). Run "sevalla login" again.`,
+        );
       }
-      // Rate limits and network errors during polling - continue
+      // Rate limits, server and network errors during polling - continue
       continue;
     }
 
@@ -102,7 +122,7 @@ export async function pollDeviceToken(
 
       case 'expired':
         failSpinner('Device code expired');
-        throw new SevallaCliError('Device code expired. Please try again.');
+        throw new SevallaCliError(EXPIRED_MESSAGE);
 
       case 'pending':
         // Continue polling
@@ -111,7 +131,7 @@ export async function pollDeviceToken(
   }
 
   failSpinner('Device code expired');
-  throw new SevallaCliError('Device code expired. Please try again.');
+  throw new SevallaCliError(EXPIRED_MESSAGE);
 }
 
 function sleep(ms: number): Promise<void> {

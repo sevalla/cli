@@ -33,6 +33,7 @@ export class ApiClient {
     const url = this.buildUrl(opts.path, opts.query);
     const headers: Record<string, string> = {
       Accept: 'application/json',
+      ...opts.headers,
     };
 
     if (this.token) {
