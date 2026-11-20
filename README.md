@@ -596,7 +596,7 @@ sevalla completion fish | source
 
 ### Device authorization (interactive)
 
-The recommended way to sign in: it opens your browser, so there's no token to copy and paste.
+The recommended way to sign in: it shows a short sign-in code and opens `https://app.sevalla.com/authorize`, where you type that code to approve. There's no token to copy and paste. Only type a code that your own terminal showed you.
 
 ```sh
 # Sign in through your browser
