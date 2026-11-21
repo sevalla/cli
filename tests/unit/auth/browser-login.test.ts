@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { setTimeout as delay } from 'node:timers/promises';
 import { httpRequest } from './http-request.ts';
 
 // The CLI saves credentials under the home directory, so point it at a throwaway one
@@ -30,14 +31,17 @@ interface ApiCall {
 
 // Fakes the API: answers the token exchange with `exchange(secret)` and records every call
 function fakeApi(
-  exchange: (secret: unknown) => Response,
+  exchange: (secret: unknown) => Response | Promise<Response>,
   expiresAt = Date.now() + 300_000,
+  create?: (body: Record<string, unknown> | undefined) => Response | undefined,
 ): ApiCall[] {
   const calls: ApiCall[] = [];
   globalThis.fetch = (async (url: string, init: RequestInit) => {
     const body = init.body ? JSON.parse(init.body as string) : undefined;
     calls.push({ url, body });
     if (url.endsWith('/auth/device-codes')) {
+      const override = create?.(body);
+      if (override) return override;
       return jsonResponse(
         {
           user_code: USER_CODE,
@@ -71,11 +75,11 @@ function captureOutput() {
   return () => lines.join('\n');
 }
 
-function startLogin() {
+function startLogin(pollWait?: (ms: number, signal: AbortSignal) => Promise<unknown>) {
   let opened!: (url: string) => void;
   const openedUrl = new Promise<string>((resolve) => (opened = resolve));
   const openBrowser = mock.fn(async (url: string) => opened(url));
-  const login = performDeviceFlow('https://api.test.com', openBrowser, DESKTOP);
+  const login = performDeviceFlow('https://api.test.com', openBrowser, { ...DESKTOP, pollWait });
   return { login, openedUrl, openBrowser };
 }
 
@@ -232,5 +236,95 @@ describe('Browser sign-in', () => {
     assert.ok(printed.includes(USER_CODE));
     assert.ok(!printed.includes(DEVICE_CODE));
     assert.ok(!printed.includes(APPROVAL_SECRET));
+  });
+
+  describe('polling alongside the callback', () => {
+    it('signs in through the poll when the API releases the key without the secret', async () => {
+      const calls = fakeApi((given) =>
+        given === undefined
+          ? jsonResponse({ status: 'approved', token: 'svl_from_poll' })
+          : jsonResponse({ status: 'pending' }),
+      );
+      const { login, openedUrl } = startLogin(async () => {});
+      await openedUrl;
+      await login;
+
+      assert.deepEqual(calls[1], {
+        url: 'https://api.test.com/auth/device-codes/token',
+        body: { device_code: DEVICE_CODE },
+      });
+      const saved = JSON.parse(
+        readFileSync(join(home, '.config/sevalla/credentials.json'), 'utf8'),
+      );
+      assert.equal(saved.token, 'svl_from_poll');
+      await assert.rejects(httpRequest(callbackUrl(calls)), /ECONNREFUSED/);
+    });
+
+    it('ends the flow when the poll reports a denial', async () => {
+      fakeApi((given) => jsonResponse({ status: given === undefined ? 'denied' : 'pending' }));
+      const { login } = startLogin(async () => {});
+      await assert.rejects(login, /Sign-in was denied/);
+    });
+
+    it('keeps only the first result when the callback wins and the poll returns a key later', async () => {
+      let pollStarted!: () => void;
+      const pollInFlight = new Promise<void>((resolve) => (pollStarted = resolve));
+      let releasePoll!: () => void;
+      const pollGate = new Promise<void>((resolve) => (releasePoll = resolve));
+      const calls = fakeApi(async (given) => {
+        if (given === undefined) {
+          pollStarted();
+          await pollGate;
+          return jsonResponse({ status: 'approved', token: 'svl_from_poll' });
+        }
+        return jsonResponse({ status: 'approved', token: 'svl_from_callback' });
+      });
+      let waits = 0;
+      const { login, openedUrl } = startLogin((ms, signal) =>
+        waits++ === 0 ? Promise.resolve() : delay(ms, undefined, { signal }),
+      );
+      await openedUrl;
+      await pollInFlight;
+
+      const reply = await httpRequest(`${callbackUrl(calls)}?approval_secret=${APPROVAL_SECRET}`);
+      assert.match(reply.body, /You're signed in to Sevalla/);
+      await login;
+      releasePoll();
+      await delay(20);
+
+      const saved = JSON.parse(
+        readFileSync(join(home, '.config/sevalla/credentials.json'), 'utf8'),
+      );
+      assert.equal(saved.token, 'svl_from_callback');
+      assert.equal(output().match(/Signed in/g)?.length, 1);
+      assert.equal(waits, 1);
+    });
+
+    it('falls back to typing a code when the API rejects callback_url', async () => {
+      const calls = fakeApi(
+        () => jsonResponse({ status: 'expired' }),
+        Date.now() - 1,
+        (body) =>
+          body?.['callback_url']
+            ? jsonResponse({ message: 'Invalid callback_url', status: 400, data: {} }, 400)
+            : undefined,
+      );
+      const openBrowser = mock.fn(async (_url: string) => {});
+
+      await assert.rejects(
+        performDeviceFlow('https://api.test.com', openBrowser, DESKTOP),
+        /expired/,
+      );
+
+      assert.ok(calls[0]!.body?.['callback_url']);
+      assert.equal(calls[1]!.url, 'https://api.test.com/auth/device-codes');
+      assert.equal(calls[1]!.body, undefined);
+      assert.deepEqual(
+        openBrowser.mock.calls.map((call) => call.arguments[0]),
+        ['https://app.sevalla.com/authorize'],
+      );
+      assert.match(output(), /ABCD-1234/);
+      await assert.rejects(httpRequest(calls[0]!.body!['callback_url'] as string), /ECONNREFUSED/);
+    });
   });
 });

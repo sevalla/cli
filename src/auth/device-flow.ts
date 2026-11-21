@@ -1,5 +1,6 @@
 import chalk from 'chalk';
 import open from 'open';
+import { setTimeout as delay } from 'node:timers/promises';
 import { ApiClient } from '../client/api-client.ts';
 import { saveToken } from './token-store.ts';
 import { startLoopbackServer } from './loopback.ts';
@@ -25,6 +26,7 @@ export interface LoginEnvironment {
   browser?: boolean;
   env?: NodeJS.ProcessEnv;
   platform?: NodeJS.Platform;
+  pollWait?: (ms: number, signal: AbortSignal) => Promise<unknown>;
 }
 
 type OpenBrowser = (url: string) => Promise<unknown>;
@@ -67,7 +69,12 @@ export async function performDeviceFlow(
     return performTypedFlow(client, baseUrl, null, `${reason}, so sign in with a code instead.`);
   }
 
-  const fallback = await performBrowserFlow(client, baseUrl, openBrowser);
+  const fallback = await performBrowserFlow(
+    client,
+    baseUrl,
+    openBrowser,
+    environment.pollWait ?? ((ms, signal) => delay(ms, undefined, { signal })),
+  );
   if (fallback === 'no-listener') {
     return performTypedFlow(
       client,
@@ -76,6 +83,7 @@ export async function performDeviceFlow(
       "Couldn't start the local sign-in listener, so sign in with a code instead.",
     );
   }
+  if (fallback === 'no-callback') return performTypedFlow(client, baseUrl, openBrowser);
   if (fallback === 'no-browser') {
     return performTypedFlow(
       client,
@@ -109,12 +117,60 @@ async function performBrowserFlow(
   client: ApiClient,
   baseUrl: string,
   openBrowser: OpenBrowser,
-): Promise<'no-listener' | 'no-browser' | null> {
+  pollWait: (ms: number, signal: AbortSignal) => Promise<unknown>,
+): Promise<'no-listener' | 'no-callback' | 'no-browser' | null> {
   let deviceCode: string | null = null;
-  let finish: (outcome: BrowserOutcome) => void = () => {};
+  let settledWith: BrowserOutcome | null = null;
+  let resolveOutcome: (outcome: BrowserOutcome) => void = () => {};
   const outcome = new Promise<BrowserOutcome>((resolve) => {
-    finish = resolve;
+    resolveOutcome = resolve;
   });
+  const stopPolling = new AbortController();
+
+  // The callback and the poll race: the first result wins and the other is ignored.
+  const finish = (result: BrowserOutcome) => {
+    if (settledWith) return;
+    settledWith = result;
+    stopPolling.abort();
+    resolveOutcome(result);
+  };
+  const signIn = (token: string) => {
+    if (settledWith) return;
+    try {
+      saveToken(token);
+    } catch (error) {
+      finish(error instanceof Error ? error : new Error(String(error)));
+      return;
+    }
+    finish('signed-in');
+  };
+
+  // An API that doesn't bind codes to the callback hands the key to a plain poll, so poll too.
+  const poll = async (code: DeviceCode) => {
+    let intervalMs = pollIntervalMs(code.interval);
+    try {
+      while (!settledWith) {
+        await pollWait(intervalMs, stopPolling.signal);
+        let result: DeviceCodeStatus;
+        try {
+          result = await client.post<DeviceCodeStatus>('/auth/device-codes/token', {
+            device_code: code.device_code,
+          });
+        } catch (error) {
+          if (error instanceof SevallaApiError && error.status === 429) {
+            intervalMs = Math.min(intervalMs + SLOW_DOWN_MS, MAX_POLL_INTERVAL_MS);
+          } else if (error instanceof SevallaApiError && error.status < 500) {
+            return;
+          }
+          continue;
+        }
+        if (result.status === 'approved' && result.token) signIn(result.token);
+        else if (result.status === 'denied' || result.status === 'expired') finish(result.status);
+      }
+    } catch {
+      // Aborted once the callback settled the sign-in
+    }
+  };
 
   let server;
   try {
@@ -129,14 +185,8 @@ async function performBrowserFlow(
 
       const result = await exchangeApprovalSecret(client, deviceCode, approvalSecret);
       if (result?.status === 'approved' && result.token) {
-        try {
-          saveToken(result.token);
-        } catch (error) {
-          finish(error instanceof Error ? error : new Error(String(error)));
-          return 'failed';
-        }
-        finish('signed-in');
-        return 'success';
+        signIn(result.token);
+        return settledWith === 'signed-in' ? 'success' : 'failed';
       }
       if (result?.status === 'denied') {
         finish('denied');
@@ -152,7 +202,14 @@ async function performBrowserFlow(
 
   let timer: NodeJS.Timeout | undefined;
   try {
-    const code = await createDeviceCode(client, baseUrl, { callback_url: server.callbackUrl });
+    let code: DeviceCode;
+    try {
+      code = await createDeviceCode(client, baseUrl, { callback_url: server.callbackUrl });
+    } catch (error) {
+      // An API that refuses callback_url still signs in with a typed code
+      if (error instanceof SevallaApiError && error.status === 400) return 'no-callback';
+      throw error;
+    }
     const authorizeUrl = `${AUTHORIZE_URL}#code=${encodeURIComponent(code.user_code)}`;
 
     deviceCode = code.device_code;
@@ -182,6 +239,7 @@ async function performBrowserFlow(
     );
 
     startSpinner('Waiting for you to approve in your browser...');
+    void poll(code);
     const result = await outcome;
     if (result instanceof Error) {
       failSpinner('Sign-in failed');
@@ -198,6 +256,7 @@ async function performBrowserFlow(
     );
   } finally {
     clearTimeout(timer);
+    stopPolling.abort();
     stopSpinner();
     await server.close();
   }
@@ -294,10 +353,7 @@ export async function pollDeviceToken(
   intervalSeconds?: unknown,
   wait = sleep,
 ): Promise<string> {
-  let intervalMs = Math.min(
-    MAX_POLL_INTERVAL_MS,
-    Math.max(POLL_INTERVAL_MS, Number(intervalSeconds) * 1000 || POLL_INTERVAL_MS),
-  );
+  let intervalMs = pollIntervalMs(intervalSeconds);
 
   while (Date.now() < expiresAt) {
     await wait(intervalMs);
@@ -344,6 +400,13 @@ export async function pollDeviceToken(
 
   failSpinner('Device code expired');
   throw new SevallaCliError(EXPIRED_MESSAGE);
+}
+
+function pollIntervalMs(intervalSeconds: unknown): number {
+  return Math.min(
+    MAX_POLL_INTERVAL_MS,
+    Math.max(POLL_INTERVAL_MS, Number(intervalSeconds) * 1000 || POLL_INTERVAL_MS),
+  );
 }
 
 function sleep(ms: number): Promise<void> {
