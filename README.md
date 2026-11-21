@@ -617,6 +617,12 @@ sevalla login --no-browser
 
 The CLI switches to the typed code on its own over SSH, in CI, on Linux without a graphical display, and when it can't open a browser.
 
+When you sign in, the CLI sends its version and this computer's short name (for example `Peters-MacBook-Pro`, without the domain and limited to letters, digits and dashes). The name is shown on the authorize page and becomes part of the new API key's name, so your API key list shows which computer each CLI key belongs to. To leave the computer name out, set `SEVALLA_HIDE_HOSTNAME=1`:
+
+```sh
+SEVALLA_HIDE_HOSTNAME=1 sevalla login
+```
+
 Credentials are stored at `~/.config/sevalla/credentials.json` with `0600` permissions.
 
 ### API token (CI/CD and scripting)
@@ -640,10 +646,11 @@ sevalla api-keys create --name "CI token"
 
 ### Environment variables
 
-| Variable            | Description                                                 |
-| ------------------- | ----------------------------------------------------------- |
-| `SEVALLA_API_TOKEN` | API token for authentication (overrides stored credentials) |
-| `SEVALLA_API_URL`   | Override the API base URL                                   |
+| Variable                | Description                                                       |
+| ----------------------- | ----------------------------------------------------------------- |
+| `SEVALLA_API_TOKEN`     | API token for authentication (overrides stored credentials)       |
+| `SEVALLA_API_URL`       | Override the API base URL                                         |
+| `SEVALLA_HIDE_HOSTNAME` | Set to `1` to leave this computer's name out of `sevalla login`   |
 
 ## Development
 
