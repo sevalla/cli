@@ -1,5 +1,6 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync, unlinkSync, chmodSync } from 'node:fs';
 import { CONFIG_DIR, CREDENTIALS_FILE } from '../helpers/config.ts';
+import { printWarning } from '../output/formatter.ts';
 
 interface Credentials {
   token: string;
@@ -40,7 +41,13 @@ export function saveToken(token: string): void {
     mode: 0o600,
   });
   // writeFileSync's mode only applies to new files, so tighten older ones too.
-  chmodSync(CREDENTIALS_FILE, 0o600);
+  try {
+    chmodSync(CREDENTIALS_FILE, 0o600);
+  } catch {
+    printWarning(
+      `Could not restrict the permissions of ${CREDENTIALS_FILE}. Make sure only you can read it.`,
+    );
+  }
 }
 
 export function clearToken(): void {

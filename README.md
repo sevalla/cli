@@ -594,9 +594,9 @@ sevalla completion fish | source
 
 ## Authentication
 
-### Device authorization (interactive)
+### Browser sign-in (interactive)
 
-The recommended way to sign in: it shows a short sign-in code and opens `https://app.sevalla.com/authorize`, where you type that code to approve. There's no token to copy and paste. Only type a code that your own terminal showed you.
+The recommended way to sign in. `sevalla login` opens `https://app.sevalla.com/authorize` with your sign-in code already filled in. Check that the code matches the one in your terminal, pick the company and role, and click **Authorize**. The terminal finishes on its own, so there's nothing to copy or paste.
 
 ```sh
 # Sign in through your browser
@@ -608,6 +608,14 @@ sevalla auth status
 # Sign out
 sevalla logout
 ```
+
+If your browser is on another machine, use `--no-browser`. The CLI shows a short code that you type on `https://app.sevalla.com/authorize` from any device. Only type a code that your own terminal showed you.
+
+```sh
+sevalla login --no-browser
+```
+
+The CLI switches to the typed code on its own over SSH, in CI, on Linux without a graphical display, and when it can't open a browser.
 
 Credentials are stored at `~/.config/sevalla/credentials.json` with `0600` permissions.
 

@@ -106,13 +106,14 @@ describe('Device Flow', () => {
     assert.equal(mockFetch.mock.callCount(), 0);
   });
 
-  it('never polls faster than every 5 seconds, whatever interval the server sends', async () => {
+  it('polls every 5 to 60 seconds, whatever interval the server sends', async () => {
     for (const [interval, expected] of [
       [0.001, 5_000],
       [-3, 5_000],
       ['abc', 5_000],
       [undefined, 5_000],
       [10, 10_000],
+      [1e9, 60_000],
     ] as const) {
       mockResponses(jsonResponse({ status: 'approved', token: 'svl_abc123' }));
       const { result, waits } = poll(undefined, interval);
@@ -150,7 +151,7 @@ describe('Device Flow', () => {
       return { mockFetch, log, openBrowser };
     }
 
-    it('shows the user code, never the device_code, and opens the authorize page without a query', async () => {
+    it('with --no-browser, shows the user code, never the device_code, and opens nothing', async () => {
       const { mockFetch, log, openBrowser } = mockCreate({
         user_code: 'ABCD1234',
         device_code: DEVICE_CODE,
@@ -158,18 +159,17 @@ describe('Device Flow', () => {
         expires_at: new Date(Date.now() - 1).toISOString(),
       });
 
-      await assert.rejects(performDeviceFlow('https://api.test.com', openBrowser), /expired/);
+      await assert.rejects(
+        performDeviceFlow('https://api.test.com', openBrowser, { browser: false }),
+        /expired/,
+      );
 
       const output = log.mock.calls.map((call) => call.arguments.join(' ')).join('\n');
       assert.match(output, /ABCD1234/);
+      assert.match(output, /app\.sevalla\.com\/authorize/);
       assert.match(output, /api\.test\.com/);
       assert.ok(!output.includes(DEVICE_CODE));
-
-      assert.equal(openBrowser.mock.callCount(), 1);
-      const opened = new URL(openBrowser.mock.calls[0]!.arguments[0]);
-      assert.equal(opened.origin + opened.pathname, 'https://app.sevalla.com/authorize');
-      assert.equal(opened.search, '');
-      assert.ok(!opened.href.includes(DEVICE_CODE));
+      assert.equal(openBrowser.mock.callCount(), 0);
 
       const [url, init] = mockFetch.mock.calls[0]!.arguments as unknown as [string, RequestInit];
       assert.equal(url, 'https://api.test.com/auth/device-codes');
@@ -186,7 +186,7 @@ describe('Device Flow', () => {
       });
 
       await assert.rejects(
-        performDeviceFlow('https://api.test.com', openBrowser),
+        performDeviceFlow('https://api.test.com', openBrowser, { browser: false }),
         /does not support this sign-in flow/,
       );
       assert.equal(openBrowser.mock.callCount(), 0);
