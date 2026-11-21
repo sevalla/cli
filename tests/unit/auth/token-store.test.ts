@@ -1,8 +1,13 @@
-import { describe, it, beforeEach, afterEach } from 'node:test';
+import { describe, it, beforeEach, afterEach, mock } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, existsSync, readFileSync, statSync } from 'node:fs';
+import fs, { mkdtempSync, rmSync, existsSync, readFileSync, statSync } from 'node:fs';
+import { syncBuiltinESMExports } from 'node:module';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+
+// saveToken writes under the home directory, so point it at a throwaway one
+const home = mkdtempSync(join(tmpdir(), 'sevalla-home-'));
+process.env['HOME'] = home;
 
 // We need to mock the config paths, so we test the logic directly
 describe('TokenStore', () => {
@@ -90,5 +95,24 @@ describe('TokenStore', () => {
       // Source is null when env is not set and no cred file at standard path
       assert.ok(source === null || source === 'credentials_file');
     });
+  });
+
+  it('warns instead of failing when the file permissions cannot be tightened', async () => {
+    mock.method(fs, 'chmodSync', () => {
+      throw Object.assign(new Error('operation not permitted'), { code: 'EPERM' });
+    });
+    syncBuiltinESMExports();
+    const log = mock.method(console, 'log', () => {});
+    try {
+      const { saveToken } = await import('../../../src/auth/token-store.ts');
+      saveToken('svl_saved');
+    } finally {
+      mock.restoreAll();
+      syncBuiltinESMExports();
+    }
+
+    const saved = JSON.parse(readFileSync(join(home, '.config/sevalla/credentials.json'), 'utf8'));
+    assert.equal(saved.token, 'svl_saved');
+    assert.match(String(log.mock.calls[0]?.arguments[0]), /Could not restrict the permissions/);
   });
 });
