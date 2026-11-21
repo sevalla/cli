@@ -1,5 +1,6 @@
 import chalk from 'chalk';
 import open from 'open';
+import { hostname } from 'node:os';
 import { setTimeout as delay } from 'node:timers/promises';
 import { ApiClient } from '../client/api-client.ts';
 import { saveToken } from './token-store.ts';
@@ -95,6 +96,22 @@ export async function performDeviceFlow(
   }
 }
 
+// The computer's short name, so the authorize page and the API key name say which machine signed in.
+export function hostLabel(host: string): string {
+  return (host.split('.')[0] ?? '')
+    .replace(/[^A-Za-z0-9-]/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^[^A-Za-z0-9]+/, '')
+    .slice(0, 63)
+    .replace(/[-.]+$/, '');
+}
+
+export function clientHeader(host = hostname()): string {
+  const label = hostLabel(host);
+  const value = `sevalla-cli/${getVersion()}${label ? ` (${label})` : ''}`;
+  return value.replace(/[^\x20-\x7e]/g, '').slice(0, 200);
+}
+
 async function createDeviceCode(
   client: ApiClient,
   baseUrl: string,
@@ -103,7 +120,7 @@ async function createDeviceCode(
   const code = await client.request<DeviceCode>({
     method: 'POST',
     path: '/auth/device-codes',
-    headers: { 'x-sevalla-client': `sevalla-cli/${getVersion()}` },
+    headers: { 'x-sevalla-client': clientHeader() },
     body,
   });
   if (!code?.user_code || !code.device_code) {

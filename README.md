@@ -596,7 +596,7 @@ sevalla completion fish | source
 
 ### Browser sign-in (interactive)
 
-The recommended way to sign in. `sevalla login` opens `https://app.sevalla.com/authorize` with your sign-in code already filled in. Check that the code matches the one in your terminal, pick the company and role, and click **Authorize**. The terminal finishes on its own, so there's nothing to copy or paste.
+The recommended way to sign in. `sevalla login` opens `https://app.sevalla.com/authorize` with your sign-in code already filled in. Check that the code matches the one in your terminal, pick the company and role, and click **Authorize**. The terminal finishes on its own, so there's nothing to copy or paste. The authorize page and the new API key's name show this computer's name, so your API key list tells you which machine each CLI key belongs to.
 
 ```sh
 # Sign in through your browser

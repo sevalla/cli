@@ -1,8 +1,14 @@
 import { describe, it, mock, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { ApiClient } from '../../../src/client/api-client.ts';
-import { performDeviceFlow, pollDeviceToken } from '../../../src/auth/device-flow.ts';
+import {
+  clientHeader,
+  hostLabel,
+  performDeviceFlow,
+  pollDeviceToken,
+} from '../../../src/auth/device-flow.ts';
 import { SevallaCliError } from '../../../src/errors/cli-error.ts';
+import { getVersion } from '../../../src/helpers/config.ts';
 
 const DEVICE_CODE = 'kT3n9cQ0yVZr8mWbH1sLx4aPqE6uJ2dFgN7oRtYvS5w';
 
@@ -175,7 +181,7 @@ describe('Device Flow', () => {
       assert.equal(url, 'https://api.test.com/auth/device-codes');
       assert.match(
         (init.headers as Record<string, string>)['x-sevalla-client']!,
-        /^sevalla-cli\/\S+$/,
+        /^sevalla-cli\/\S+( \([A-Za-z0-9][A-Za-z0-9-]*\))?$/,
       );
     });
 
@@ -190,6 +196,43 @@ describe('Device Flow', () => {
         /does not support this sign-in flow/,
       );
       assert.equal(openBrowser.mock.callCount(), 0);
+    });
+  });
+
+  describe('client header', () => {
+    it('reduces the hostname to a safe short label', () => {
+      for (const [host, expected] of [
+        ['devbox', 'devbox'],
+        ['build-01', 'build-01'],
+        ['Peters-MacBook-Pro.local', 'Peters-MacBook-Pro'],
+        ['web1.eu-west.example.com', 'web1'],
+        ["Péter's MacBook Pro", 'P-ter-s-MacBook-Pro'],
+        ['  my  laptop  ', 'my-laptop'],
+        ['---odd___name---', 'odd-name'],
+        ['名前', ''],
+        ['', ''],
+        ['.local', ''],
+      ] as const) {
+        assert.equal(hostLabel(host), expected, JSON.stringify(host));
+      }
+    });
+
+    it('caps the label at 63 characters without a trailing dash', () => {
+      assert.equal(hostLabel('a'.repeat(300)), 'a'.repeat(63));
+      assert.equal(hostLabel(`${'a'.repeat(62)}-bbb`), 'a'.repeat(62));
+    });
+
+    it('sends the version and the computer name in printable ASCII', () => {
+      assert.equal(clientHeader('devbox.local'), `sevalla-cli/${getVersion()} (devbox)`);
+      const header = clientHeader("Péter's MacBook Pro.local");
+      assert.match(header, /^sevalla-cli\/\S+ \(P-ter-s-MacBook-Pro\)$/);
+      assert.match(header, /^[\x20-\x7e]{1,200}$/);
+      assert.ok(clientHeader('x'.repeat(1000)).length <= 200);
+    });
+
+    it('leaves out the parentheses when nothing of the name is left', () => {
+      assert.match(clientHeader('名前'), /^sevalla-cli\/\S+$/);
+      assert.match(clientHeader(''), /^sevalla-cli\/\S+$/);
     });
   });
 });
