@@ -1,6 +1,6 @@
 {
   "name": "@sevalla/cli",
-  "version": "2.3.0",
+  "version": "2.4.0",
   "description": "Official CLI for the Sevalla cloud platform",
   "type": "module",
   "bin": {

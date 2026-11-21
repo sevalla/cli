@@ -1,3 +1,10 @@
+# [2.4.0](https://github.com/sevalla/cli/compare/v2.3.0...v2.4.0) (2026-11-21)
+
+
+### Features
+
+* show this computer's name when signing in ([#19](https://github.com/sevalla/cli/issues/19)) ([b12b528](https://github.com/sevalla/cli/commit/b12b52839839be0da604d753b6dd9694194d8f11))
+
 # [2.3.0](https://github.com/sevalla/cli/compare/v2.2.1...v2.3.0) (2026-11-21)
 
 
