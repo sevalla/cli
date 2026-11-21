@@ -154,6 +154,8 @@ describe('Browser sign-in', () => {
       assert.equal(calls[1]!.url, 'https://api.test.com/auth/device-codes');
       assert.equal(calls[1]!.body, undefined);
       assert.match(output(), /Couldn't open a browser/);
+      assert.equal(output().match(/ABCD-1234/g)?.length, 1);
+      assert.doesNotMatch(output(), /Confirm the code/);
       await assert.rejects(httpRequest(firstCallback), /ECONNREFUSED/);
     });
   });
@@ -347,6 +349,33 @@ describe('Browser sign-in', () => {
       startPoll();
       await pollDone;
       await delay(20);
+      releaseExchange();
+
+      assert.match((await reply).body, /You're signed in to Sevalla/);
+      await login;
+      const saved = JSON.parse(
+        readFileSync(join(home, '.config/sevalla/credentials.json'), 'utf8'),
+      );
+      assert.equal(saved.token, 'svl_from_callback');
+    });
+
+    it('saves the key when the code expires while the exchange is in flight', async () => {
+      let exchangeStarted!: () => void;
+      const exchangeInFlight = new Promise<void>((resolve) => (exchangeStarted = resolve));
+      let releaseExchange!: () => void;
+      const exchangeGate = new Promise<void>((resolve) => (releaseExchange = resolve));
+      const calls = fakeApi(async (given) => {
+        if (given === undefined) return jsonResponse({ status: 'pending' });
+        exchangeStarted();
+        await exchangeGate;
+        return jsonResponse({ status: 'approved', token: 'svl_from_callback' });
+      }, Date.now() + 150);
+      const { login, openedUrl } = startLogin();
+      await openedUrl;
+
+      const reply = httpRequest(`${callbackUrl(calls)}?approval_secret=${APPROVAL_SECRET}`);
+      await exchangeInFlight;
+      await delay(250);
       releaseExchange();
 
       assert.match((await reply).body, /You're signed in to Sevalla/);

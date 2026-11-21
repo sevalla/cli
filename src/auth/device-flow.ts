@@ -174,15 +174,14 @@ async function performBrowserFlow(
     if (!approvalSecret) return 'failed';
 
     exchanging = true;
-    let result: DeviceCodeStatus | null;
     try {
-      result = await exchangeApprovalSecret(client, deviceCode, approvalSecret);
+      const result = await exchangeApprovalSecret(client, deviceCode, approvalSecret);
+      if (result?.status === 'approved' && result.token) signIn(result.token);
+      else if (result?.status === 'denied' || result?.status === 'expired') finish(result.status);
     } finally {
       exchanging = false;
+      if (heldOutcome) finish(heldOutcome);
     }
-    if (result?.status === 'approved' && result.token) signIn(result.token);
-    else if (result?.status === 'denied' || result?.status === 'expired') finish(result.status);
-    if (heldOutcome) finish(heldOutcome);
     // A wrong or reused secret leaves the flow waiting for the real callback until expiry
     return pageFor(settledWith);
   };
@@ -248,6 +247,12 @@ async function performBrowserFlow(
 
     console.log();
     console.log('Opening your browser to sign in...');
+    try {
+      await openBrowser(authorizeUrl);
+    } catch {
+      return 'no-browser';
+    }
+
     console.log(
       `Confirm the code ${chalk.cyan.bold(code.user_code)} matches the one in your browser.`,
     );
@@ -258,12 +263,6 @@ async function performBrowserFlow(
       chalk.dim('Browser on another machine? Press Ctrl+C and run "sevalla login --no-browser".'),
     );
     console.log();
-
-    try {
-      await openBrowser(authorizeUrl);
-    } catch {
-      return 'no-browser';
-    }
 
     const expiresInMs = new Date(code.expires_at).getTime() - Date.now();
     timer = setTimeout(
