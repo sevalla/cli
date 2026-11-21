@@ -199,8 +199,25 @@ describe('Browser sign-in', () => {
     await login;
   });
 
-  it('exits with code 1 when the sign-in is denied', async () => {
+  it('ignores a denial the API does not confirm and keeps waiting', async () => {
     const calls = fakeApi(approveWith(APPROVAL_SECRET));
+    const { login, openedUrl } = startLogin();
+    await openedUrl;
+    const url = callbackUrl(calls);
+
+    assert.match((await httpRequest(`${url}?error=access_denied`)).body, /That link didn't work/);
+    assert.deepEqual(calls[1]!.body, { device_code: DEVICE_CODE });
+    assert.match(
+      (await httpRequest(`${url}?approval_secret=${APPROVAL_SECRET}`)).body,
+      /signed in/,
+    );
+    await login;
+  });
+
+  it('exits with code 1 when the sign-in is denied', async () => {
+    const calls = fakeApi((given) =>
+      jsonResponse({ status: given === undefined ? 'denied' : 'pending' }),
+    );
     const { login, openedUrl } = startLogin();
     await openedUrl;
 

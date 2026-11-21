@@ -162,8 +162,13 @@ async function performBrowserFlow(
     if (!deviceCode) return 'failed';
     if (settledWith) return pageFor(settledWith);
     if (query.get('error') === 'access_denied') {
-      finish('denied');
-      return 'denied';
+      // Anyone who learns the callback URL could send this, so only the API can confirm a denial
+      const status = await client
+        .post<DeviceCodeStatus>('/auth/device-codes/token', { device_code: deviceCode })
+        .catch(() => null);
+      if (status?.status === 'approved' && status.token) signIn(status.token);
+      else if (status?.status === 'denied') finish('denied');
+      return pageFor(settledWith);
     }
     const approvalSecret = query.get('approval_secret');
     if (!approvalSecret) return 'failed';
