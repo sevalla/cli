@@ -1,3 +1,10 @@
+## [2.2.1](https://github.com/sevalla/cli/compare/v2.2.0...v2.2.1) (2026-11-21)
+
+
+### Bug Fixes
+
+* **security:** use the device_code token exchange and show the code to type ([#17](https://github.com/sevalla/cli/issues/17)) ([07d0f31](https://github.com/sevalla/cli/commit/07d0f31afdc813c98fbb545e25a6d76f61be90ea))
+
 # [2.2.0](https://github.com/sevalla/cli/compare/v2.1.0...v2.2.0) (2026-11-18)
 
 
