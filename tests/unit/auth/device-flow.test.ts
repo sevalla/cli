@@ -223,16 +223,44 @@ describe('Device Flow', () => {
     });
 
     it('sends the version and the computer name in printable ASCII', () => {
-      assert.equal(clientHeader('devbox.local'), `sevalla-cli/${getVersion()} (devbox)`);
-      const header = clientHeader("Péter's MacBook Pro.local");
+      assert.equal(clientHeader('devbox.local', {}), `sevalla-cli/${getVersion()} (devbox)`);
+      const header = clientHeader("Péter's MacBook Pro.local", {});
       assert.match(header, /^sevalla-cli\/\S+ \(P-ter-s-MacBook-Pro\)$/);
       assert.match(header, /^[\x20-\x7e]{1,200}$/);
-      assert.ok(clientHeader('x'.repeat(1000)).length <= 200);
+      assert.ok(clientHeader('x'.repeat(1000), {}).length <= 200);
+    });
+
+    it('matches the format the dashboard accepts', () => {
+      const DASHBOARD_FORMAT =
+        /^sevalla-cli\/(\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)?)(?: \(([A-Za-z0-9][A-Za-z0-9-]{0,62})\))?$/;
+      for (const host of [
+        'devbox',
+        'Peters-MacBook-Pro.local',
+        'web1.eu-west.example.com',
+        "Péter's MacBook Pro",
+        '-.-a.b',
+        'a'.repeat(300),
+        `${'b'.repeat(62)}.-x`,
+        '名前',
+        '',
+      ]) {
+        const header = clientHeader(host, {});
+        assert.match(header, DASHBOARD_FORMAT, JSON.stringify(host));
+        assert.ok(!hostLabel(host).includes('.'));
+      }
+    });
+
+    it('leaves out the computer name when SEVALLA_HIDE_HOSTNAME is set', () => {
+      const base = `sevalla-cli/${getVersion()}`;
+      assert.equal(clientHeader('devbox', { SEVALLA_HIDE_HOSTNAME: '1' }), base);
+      assert.equal(clientHeader('devbox', { SEVALLA_HIDE_HOSTNAME: 'true' }), base);
+      assert.equal(clientHeader('devbox', { SEVALLA_HIDE_HOSTNAME: '0' }), `${base} (devbox)`);
+      assert.equal(clientHeader('devbox', { SEVALLA_HIDE_HOSTNAME: '' }), `${base} (devbox)`);
     });
 
     it('leaves out the parentheses when nothing of the name is left', () => {
-      assert.match(clientHeader('名前'), /^sevalla-cli\/\S+$/);
-      assert.match(clientHeader(''), /^sevalla-cli\/\S+$/);
+      assert.match(clientHeader('名前', {}), /^sevalla-cli\/\S+$/);
+      assert.match(clientHeader('', {}), /^sevalla-cli\/\S+$/);
     });
   });
 });

@@ -596,7 +596,7 @@ sevalla completion fish | source
 
 ### Browser sign-in (interactive)
 
-The recommended way to sign in. `sevalla login` opens `https://app.sevalla.com/authorize` with your sign-in code already filled in. Check that the code matches the one in your terminal, pick the company and role, and click **Authorize**. The terminal finishes on its own, so there's nothing to copy or paste. The authorize page and the new API key's name show this computer's name, so your API key list tells you which machine each CLI key belongs to.
+The recommended way to sign in. `sevalla login` opens `https://app.sevalla.com/authorize` with your sign-in code already filled in. Check that the code matches the one in your terminal, pick the company and role, and click **Authorize**. The terminal finishes on its own, so there's nothing to copy or paste.
 
 ```sh
 # Sign in through your browser
@@ -616,6 +616,12 @@ sevalla login --no-browser
 ```
 
 The CLI switches to the typed code on its own over SSH, in CI, on Linux without a graphical display, and when it can't open a browser.
+
+When you sign in, the CLI sends its version and this computer's short name (for example `Peters-MacBook-Pro`, without the domain and limited to letters, digits and dashes). The name is shown on the authorize page and becomes part of the new API key's name, so your API key list shows which computer each CLI key belongs to. To leave the computer name out, set `SEVALLA_HIDE_HOSTNAME=1`:
+
+```sh
+SEVALLA_HIDE_HOSTNAME=1 sevalla login
+```
 
 Credentials are stored at `~/.config/sevalla/credentials.json` with `0600` permissions.
 
@@ -640,10 +646,11 @@ sevalla api-keys create --name "CI token"
 
 ### Environment variables
 
-| Variable            | Description                                                 |
-| ------------------- | ----------------------------------------------------------- |
-| `SEVALLA_API_TOKEN` | API token for authentication (overrides stored credentials) |
-| `SEVALLA_API_URL`   | Override the API base URL                                   |
+| Variable                | Description                                                       |
+| ----------------------- | ----------------------------------------------------------------- |
+| `SEVALLA_API_TOKEN`     | API token for authentication (overrides stored credentials)       |
+| `SEVALLA_API_URL`       | Override the API base URL                                         |
+| `SEVALLA_HIDE_HOSTNAME` | Set to `1` to leave this computer's name out of `sevalla login`   |
 
 ## Development
 

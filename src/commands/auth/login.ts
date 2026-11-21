@@ -20,7 +20,7 @@ on Linux without a display, or when no browser can be opened. Type that code on
 https://app.sevalla.com/authorize from any device.
 
 The authorize page and the name of the new API key show this computer's name, so
-you can tell which machine signed in.
+you can tell which machine signed in. Set SEVALLA_HIDE_HOSTNAME=1 to leave it out.
 
 Examples:
   $ sevalla login

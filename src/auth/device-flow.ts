@@ -106,10 +106,12 @@ export function hostLabel(host: string): string {
     .replace(/[-.]+$/, '');
 }
 
-export function clientHeader(host = hostname()): string {
-  const label = hostLabel(host);
-  const value = `sevalla-cli/${getVersion()}${label ? ` (${label})` : ''}`;
-  return value.replace(/[^\x20-\x7e]/g, '').slice(0, 200);
+export function clientHeader(host = hostname(), env: NodeJS.ProcessEnv = process.env): string {
+  const base = `sevalla-cli/${getVersion()}`.replace(/[^\x20-\x7e]/g, '').slice(0, 200);
+  const hidden = !!env['SEVALLA_HIDE_HOSTNAME'] && env['SEVALLA_HIDE_HOSTNAME'] !== '0';
+  const label = hidden ? '' : hostLabel(host);
+  const withHost = `${base} (${label})`;
+  return label && withHost.length <= 200 ? withHost : base;
 }
 
 async function createDeviceCode(
