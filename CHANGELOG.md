@@ -1,3 +1,10 @@
+# [2.3.0](https://github.com/sevalla/cli/compare/v2.2.1...v2.3.0) (2026-11-21)
+
+
+### Features
+
+* sign in with one click in the browser ([#18](https://github.com/sevalla/cli/issues/18)) ([893974f](https://github.com/sevalla/cli/commit/893974f2ed4143b2f362a448d6bd7f10d468aad8))
+
 ## [2.2.1](https://github.com/sevalla/cli/compare/v2.2.0...v2.2.1) (2026-11-21)
 
 
