@@ -4,6 +4,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { ApiClient } from '../client/api-client.ts';
 import { saveToken } from './token-store.ts';
 import { startLoopbackServer } from './loopback.ts';
+import type { CallbackPage } from './loopback.ts';
 import { AUTHORIZE_URL, getBaseUrl, getVersion } from '../helpers/config.ts';
 import { SevallaApiError } from '../errors/api-error.ts';
 import { SevallaCliError } from '../errors/cli-error.ts';
@@ -145,6 +146,50 @@ async function performBrowserFlow(
     finish('signed-in');
   };
 
+  // The server deletes the code when it hands out the key, so while a secret exchange is in
+  // flight a poll or the expiry timer can see "expired" first. Hold those until the exchange
+  // decides, otherwise its key would be dropped.
+  let exchanging = false;
+  let heldOutcome: BrowserOutcome | null = null;
+  const finishUnlessExchanging = (result: BrowserOutcome) => {
+    if (exchanging) heldOutcome ??= result;
+    else finish(result);
+  };
+  const pageFor = (result: BrowserOutcome | null): CallbackPage =>
+    result === 'signed-in' ? 'success' : result === 'denied' ? 'denied' : 'failed';
+
+  const handleCallback = async (query: URLSearchParams): Promise<CallbackPage> => {
+    if (!deviceCode) return 'failed';
+    if (settledWith) return pageFor(settledWith);
+    if (query.get('error') === 'access_denied') {
+      finish('denied');
+      return 'denied';
+    }
+    const approvalSecret = query.get('approval_secret');
+    if (!approvalSecret) return 'failed';
+
+    exchanging = true;
+    let result: DeviceCodeStatus | null;
+    try {
+      result = await exchangeApprovalSecret(client, deviceCode, approvalSecret);
+    } finally {
+      exchanging = false;
+    }
+    if (result?.status === 'approved' && result.token) signIn(result.token);
+    else if (result?.status === 'denied' || result?.status === 'expired') finish(result.status);
+    if (heldOutcome) finish(heldOutcome);
+    // A wrong or reused secret leaves the flow waiting for the real callback until expiry
+    return pageFor(settledWith);
+  };
+
+  // Callbacks run one at a time, so two of them can never both exchange the secret.
+  let callbacks: Promise<unknown> = Promise.resolve();
+  const onCallback = (query: URLSearchParams): Promise<CallbackPage> => {
+    const run = callbacks.then(() => handleCallback(query));
+    callbacks = run.catch(() => {});
+    return run;
+  };
+
   // An API that doesn't bind codes to the callback hands the key to a plain poll, so poll too.
   const poll = async (code: DeviceCode) => {
     let intervalMs = pollIntervalMs(code.interval);
@@ -164,8 +209,11 @@ async function performBrowserFlow(
           }
           continue;
         }
+        if (stopPolling.signal.aborted) return;
         if (result.status === 'approved' && result.token) signIn(result.token);
-        else if (result.status === 'denied' || result.status === 'expired') finish(result.status);
+        else if (result.status === 'denied' || result.status === 'expired') {
+          finishUnlessExchanging(result.status);
+        }
       }
     } catch {
       // Aborted once the callback settled the sign-in
@@ -174,28 +222,7 @@ async function performBrowserFlow(
 
   let server;
   try {
-    server = await startLoopbackServer(async (query) => {
-      if (!deviceCode) return 'failed';
-      if (query.get('error') === 'access_denied') {
-        finish('denied');
-        return 'denied';
-      }
-      const approvalSecret = query.get('approval_secret');
-      if (!approvalSecret) return 'failed';
-
-      const result = await exchangeApprovalSecret(client, deviceCode, approvalSecret);
-      if (result?.status === 'approved' && result.token) {
-        signIn(result.token);
-        return settledWith === 'signed-in' ? 'success' : 'failed';
-      }
-      if (result?.status === 'denied') {
-        finish('denied');
-        return 'denied';
-      }
-      if (result?.status === 'expired') finish('expired');
-      // A wrong or reused secret: keep listening for the real callback until the code expires
-      return 'failed';
-    });
+    server = await startLoopbackServer(onCallback);
   } catch {
     return 'no-listener';
   }
@@ -213,11 +240,6 @@ async function performBrowserFlow(
     const authorizeUrl = `${AUTHORIZE_URL}#code=${encodeURIComponent(code.user_code)}`;
 
     deviceCode = code.device_code;
-    try {
-      await openBrowser(authorizeUrl);
-    } catch {
-      return 'no-browser';
-    }
 
     console.log();
     console.log('Opening your browser to sign in...');
@@ -232,9 +254,15 @@ async function performBrowserFlow(
     );
     console.log();
 
+    try {
+      await openBrowser(authorizeUrl);
+    } catch {
+      return 'no-browser';
+    }
+
     const expiresInMs = new Date(code.expires_at).getTime() - Date.now();
     timer = setTimeout(
-      () => finish('expired'),
+      () => finishUnlessExchanging('expired'),
       Math.min(Math.max(expiresInMs, 0) || 0, MAX_TIMEOUT_MS),
     );
 
@@ -252,7 +280,7 @@ async function performBrowserFlow(
     stopSpinner();
     if (result === 'denied') throw new SevallaCliError('Sign-in was denied.');
     throw new SevallaCliError(
-      'The sign-in request expired before it was approved. Run "sevalla login" to try again, or "sevalla login --no-browser" if your browser is on another machine.',
+      'The sign-in request expired before it was approved. Run "sevalla login" to try again, or "sevalla login --no-browser" if your browser is on another machine. If you already approved this sign-in, check API keys in the Sevalla dashboard and delete any key you do not use.',
     );
   } finally {
     clearTimeout(timer);

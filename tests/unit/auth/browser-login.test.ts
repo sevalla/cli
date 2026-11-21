@@ -300,6 +300,72 @@ describe('Browser sign-in', () => {
       assert.equal(waits, 1);
     });
 
+    it('lets an in-flight exchange decide when the poll sees the code expire', async () => {
+      let exchangeStarted!: () => void;
+      const exchangeInFlight = new Promise<void>((resolve) => (exchangeStarted = resolve));
+      let releaseExchange!: () => void;
+      const exchangeGate = new Promise<void>((resolve) => (releaseExchange = resolve));
+      let pollAnswered!: () => void;
+      const pollDone = new Promise<void>((resolve) => (pollAnswered = resolve));
+      let startPoll!: () => void;
+      const pollGo = new Promise<void>((resolve) => (startPoll = resolve));
+
+      const calls = fakeApi(async (given) => {
+        if (given === undefined) {
+          pollAnswered();
+          return jsonResponse({ status: 'expired' });
+        }
+        exchangeStarted();
+        await exchangeGate;
+        return jsonResponse({ status: 'approved', token: 'svl_from_callback' });
+      });
+      let waits = 0;
+      const { login, openedUrl } = startLogin((ms, signal) =>
+        waits++ === 0 ? pollGo : delay(ms, undefined, { signal }),
+      );
+      await openedUrl;
+
+      const reply = httpRequest(`${callbackUrl(calls)}?approval_secret=${APPROVAL_SECRET}`);
+      await exchangeInFlight;
+      startPoll();
+      await pollDone;
+      await delay(20);
+      releaseExchange();
+
+      assert.match((await reply).body, /You're signed in to Sevalla/);
+      await login;
+      const saved = JSON.parse(
+        readFileSync(join(home, '.config/sevalla/credentials.json'), 'utf8'),
+      );
+      assert.equal(saved.token, 'svl_from_callback');
+    });
+
+    it('exchanges the secret once when two callbacks arrive together', async () => {
+      let exchanges = 0;
+      const calls = fakeApi(async (given) => {
+        if (given === undefined) return jsonResponse({ status: 'pending' });
+        exchanges += 1;
+        await delay(10);
+        return exchanges === 1
+          ? jsonResponse({ status: 'approved', token: 'svl_first' })
+          : jsonResponse({ status: 'expired' });
+      });
+      const { login, openedUrl } = startLogin();
+      await openedUrl;
+
+      const url = `${callbackUrl(calls)}?approval_secret=${APPROVAL_SECRET}`;
+      const replies = await Promise.all([httpRequest(url), httpRequest(url)]);
+      await login;
+
+      assert.equal(exchanges, 1);
+      for (const reply of replies) assert.match(reply.body, /You're signed in to Sevalla/);
+      const saved = JSON.parse(
+        readFileSync(join(home, '.config/sevalla/credentials.json'), 'utf8'),
+      );
+      assert.equal(saved.token, 'svl_first');
+      assert.equal(output().match(/Signed in/g)?.length, 1);
+    });
+
     it('falls back to typing a code when the API rejects callback_url', async () => {
       const calls = fakeApi(
         () => jsonResponse({ status: 'expired' }),
