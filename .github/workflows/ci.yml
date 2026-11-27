@@ -57,9 +57,12 @@ jobs:
       id-token: write
 
     steps:
+      # The release commit goes to main, which only accepts pull requests. A deploy key is on the
+      # ruleset's bypass list; the workflow's own token can't be.
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ssh-key: ${{ secrets.RELEASE_DEPLOY_KEY }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
