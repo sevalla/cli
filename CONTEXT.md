@@ -78,6 +78,19 @@ sevalla apps delete <id> --confirm
 
 Environment variable values are hidden by default (`env-vars list` shows keys only; pass `--show-values` to include them), and `env-vars create`/`update` don't echo the value back. Variables created or updated with `--secret` are write-only: the API returns `is_secret: true` and `value: null` for them, even with `--show-values`, and they can't be made regular again.
 
+## Usage and Cost
+
+`usage periods` lists the billing periods, newest first; the first one is the current period, which is still open. `usage summary` covers one billing period: the current one by default, or an earlier one when `--period-start` and `--period-end` are copied from a `usage periods` item. `usage range --start-date <YYYY-MM-DD> --end-date <YYYY-MM-DD>` covers any range of whole UTC days, at most 366. All three take `--project`, `--services` and `--types` as filters (the last two comma-separated), and `summary` and `range` add a breakdown per day and per service with `--include days,services`.
+
+```bash
+sevalla usage summary --include services --json
+# → { "period_start": "...", "period_end": "...", "total_cost": 20.62, "usage_by_type": [ ... ], "services": [ ... ] }
+```
+
+Amounts are estimates in USD at current prices, before tax, credits and discounts. Without an active subscription `usage periods` returns an empty list and the other two fail with a 404.
+
+Run usage commands one after another, never in parallel: they are rate limited, and a request made while another usage request of the company is still running can fail with a 429. `usage periods` is not paginated: it takes `--limit` (12 by default, at most 24) and has no `--page` or `--per-page`.
+
 ## Error Format
 
 Errors are output as JSON when in JSON mode:
