@@ -18,6 +18,7 @@ import { makeResourcesCommand } from './commands/resources/index.ts';
 import { makeGlobalEnvVarsCommand } from './commands/global-env-vars/index.ts';
 import { makeGitCommand } from './commands/git/index.ts';
 import { makeUsersCommand } from './commands/users/index.ts';
+import { makeUsageCommand } from './commands/usage/index.ts';
 import { makeUsageAlertsCommand } from './commands/usage-alerts/index.ts';
 import { makeSchemaCommand } from './commands/schema.ts';
 import { makeCompletionCommand, makeCompleteCommand } from './commands/completion.ts';
@@ -60,6 +61,7 @@ export function createProgram(): Command {
   program.addCommand(makeGlobalEnvVarsCommand());
   program.addCommand(makeGitCommand());
   program.addCommand(makeUsersCommand());
+  program.addCommand(makeUsageCommand());
   program.addCommand(makeUsageAlertsCommand());
 
   // Completion

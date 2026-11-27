@@ -552,6 +552,21 @@ sevalla git providers
 sevalla users list
 ```
 
+### Usage and cost
+
+```sh
+# Amounts are estimates in USD at current prices, before tax, credits and discounts
+sevalla usage periods
+sevalla usage periods --limit 3 --types appCompute,db
+# The current billing period, or an earlier one with the dates "usage periods" lists
+sevalla usage summary
+sevalla usage summary --period-start <datetime> --period-end <datetime> --include days,services
+# Any range of whole UTC days, such as a calendar month
+sevalla usage range --start-date 2026-11-01 --end-date 2026-11-30
+sevalla usage range --start-date 2026-11-01 --end-date 2026-11-30 --project <id> --include services
+# Each command is limited to 10 requests per minute; run usage commands one after another, not in parallel
+```
+
 ### Global options
 
 Every command accepts these flags:
