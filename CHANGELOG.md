@@ -1,3 +1,10 @@
+# [2.5.0](https://github.com/sevalla/cli/compare/v2.4.0...v2.5.0) (2026-11-27)
+
+
+### Features
+
+* add usage commands for billing periods, a period summary and a date range ([#20](https://github.com/sevalla/cli/issues/20)) ([fca2055](https://github.com/sevalla/cli/commit/fca20552303714a97deb298e07e259e99d5f9327))
+
 # [2.4.0](https://github.com/sevalla/cli/compare/v2.3.0...v2.4.0) (2026-11-21)
 
 
