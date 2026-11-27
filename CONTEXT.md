@@ -89,7 +89,7 @@ sevalla usage summary --include services --json
 
 Amounts are estimates in USD at current prices, before tax, credits and discounts. Without an active subscription `usage periods` returns an empty list and the other two fail with a 404.
 
-Run usage commands one after another, never in parallel: each is limited to 10 requests per minute, and a request made while another usage request of the company is still running can fail with a 429.
+Run usage commands one after another, never in parallel: they are rate limited, and a request made while another usage request of the company is still running can fail with a 429. `usage periods` is not paginated: it takes `--limit` (12 by default, at most 24) and has no `--page` or `--per-page`.
 
 ## Error Format
 

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { usagePeriodsCommand } from '../../../src/commands/usage/periods.ts';
 import { usageSummaryCommand } from '../../../src/commands/usage/summary.ts';
 import { usageRangeCommand } from '../../../src/commands/usage/range.ts';
+import { formatUsage } from '../../../src/commands/usage/shared.ts';
 import { createProgram } from '../../../src/program.ts';
 
 const period = {
@@ -363,5 +364,13 @@ describe('Usage commands', () => {
       ...filters,
       ['--include <parts>', false],
     ]);
+  });
+});
+
+describe('formatUsage', () => {
+  it('groups thousands and keeps at most two decimals', () => {
+    assert.equal(formatUsage(1492139827.738047), '1,492,139,827.74');
+    assert.equal(formatUsage(86400), '86,400');
+    assert.equal(formatUsage(0), '0');
   });
 });

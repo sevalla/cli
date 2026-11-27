@@ -564,7 +564,7 @@ sevalla usage summary --period-start <datetime> --period-end <datetime> --includ
 # Any range of whole UTC days, such as a calendar month
 sevalla usage range --start-date 2026-11-01 --end-date 2026-11-30
 sevalla usage range --start-date 2026-11-01 --end-date 2026-11-30 --project <id> --include services
-# Each command is limited to 10 requests per minute; run usage commands one after another, not in parallel
+# These commands are rate limited; run them one after another, not in parallel
 ```
 
 ### Global options

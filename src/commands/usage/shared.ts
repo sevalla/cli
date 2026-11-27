@@ -65,6 +65,10 @@ const unitPrice = new Intl.NumberFormat('en-US', {
 
 export const formatUsd = (amount: number): string => usd.format(amount);
 
+const usageAmount = new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 });
+
+export const formatUsage = (amount: number): string => usageAmount.format(amount);
+
 export const costByType = (item: UsageTotals): string =>
   item.usage_by_type.map((usage) => `${usage.type} ${formatUsd(usage.cost)}`).join('\n');
 
@@ -78,7 +82,7 @@ function printUsageSummary(result: UsageSummary): void {
   console.log(chalk.bold('Usage by type'));
   printTable(result.usage_by_type, [
     { header: 'Type', key: 'type' },
-    { header: 'Usage', key: 'total_usage' },
+    { header: 'Usage', get: (usage) => formatUsage(usage.total_usage) },
     { header: 'Unit Price', get: (usage) => unitPrice.format(usage.unit_price) },
     { header: 'Cost', get: (usage) => formatUsd(usage.cost) },
   ]);
